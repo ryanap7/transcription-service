@@ -7,7 +7,7 @@ import sys
 import os
 
 print("=" * 80)
-print("SIMTELPAS AI - Starting (Post-Fork CUDA Init)...")
+print("SIMTELPAS AI - Starting...")
 print("=" * 80)
 
 # Load configuration
@@ -31,6 +31,5 @@ from src.api.api import app
 print("\n" + "=" * 80)
 print("✓ App loaded - Pipeline will init in workers after fork")
 print("=" * 80)
-print()
 
 pipeline_initialized = False
