@@ -1,7 +1,13 @@
+# ============================================================================
+# SIMTELPAS AI
+# ============================================================================
+
 services:
   audio-transcription:
     build: .
     container_name: audio-transcription-api
+
+    # GPU Configuration
     deploy:
       resources:
         reservations:
@@ -10,11 +16,17 @@ services:
               count: 1
               capabilities: [gpu]
     runtime: nvidia
+
+    # Expose port 8000 directly
     ports:
       - "8000:8000"
+
+    # Volumes
     volumes:
       - ./outputs:/app/outputs
       - ./temp:/app/temp
+
+    # Environment
     env_file:
       - .env
     environment:
@@ -23,10 +35,22 @@ services:
       WHISPER_MODEL: ${WHISPER_MODEL:-large-v3}
       LANGUAGE: ${LANGUAGE:-id}
       CUDA_VISIBLE_DEVICES: 0
+      FLASK_ENV: production
+
+    # Health check
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s
+      start_period: 90s
+
+    # Restart policy
     restart: unless-stopped
+
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
