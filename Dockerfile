@@ -62,14 +62,14 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=180s --retries=3 \
   CMD curl -f http://localhost:8000/health || exit 1
 
-# Run with Gunicorn using wsgi.py for model preloading
+# Run with Gunicorn using SYNC workers
 CMD ["gunicorn", \
      "--bind", "0.0.0.0:8000", \
-     "--workers", "2", \
-     "--threads", "4", \
+     "--workers", "1", \
+     "--worker-class", "sync", \
      "--timeout", "900", \
-     "--max-requests", "1000", \
-     "--max-requests-jitter", "100", \
+     "--max-requests", "100", \
+     "--max-requests-jitter", "10", \
      "--access-logfile", "-", \
      "--error-logfile", "-", \
      "--log-level", "info", \
