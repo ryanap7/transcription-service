@@ -1,9 +1,11 @@
 """
-Main audio transcription pipeline
-Pure in-memory processing with detailed timing, NO file operations
+Main audio transcription pipeline with REAL-TIME PROGRESS
+Pure in-memory processing with detailed timing
 """
 import time
+import sys
 from typing import Dict, Optional, Union, BinaryIO
+from threading import Thread
 
 from src.core.config import Config
 from src.core.exceptions import *
@@ -14,10 +16,39 @@ from src.services.summarizer import AISummarizer
 from src.utils.formatter import TranscriptFormatter
 
 
+class ProgressTimer:
+    """Live progress timer - updates every 100ms"""
+
+    def __init__(self, step_name: str):
+        self.step_name = step_name
+        self.start_time = time.time()
+        self.running = True
+        self.thread = None
+
+    def _update(self):
+        """Update timer display in real-time"""
+        while self.running:
+            elapsed = time.time() - self.start_time
+            print(f"\r⏱️  {self.step_name}: {elapsed:.1f}s", end='', flush=True)
+            time.sleep(0.1)  # Update 10 times per second
+
+    def start(self):
+        """Start the live timer"""
+        self.thread = Thread(target=self._update, daemon=True)
+        self.thread.start()
+
+    def stop(self):
+        """Stop timer and show final time"""
+        self.running = False
+        if self.thread:
+            self.thread.join()
+        elapsed = time.time() - self.start_time
+        print(f"\r✓ {self.step_name}: {elapsed:.2f}s                ", flush=True)
+        return elapsed
+
+
 class AudioTranscriptionPipeline:
-    """
-    Complete audio transcription pipeline
-    """
+    """Complete audio transcription pipeline"""
 
     def __init__(
         self,
@@ -25,35 +56,24 @@ class AudioTranscriptionPipeline:
         language: Optional[str] = None,
         enable_summary: bool = True
     ):
-        """
-        Initialize pipeline
-
-        Args:
-            whisper_model: Whisper model size
-            language: Target language
-            enable_summary: Whether to generate AI summary
-        """
-        # Validate configuration
+        """Initialize pipeline with progress tracking"""
         is_valid, errors = Config.validate()
         if not is_valid:
             raise ConfigurationError(
                 f"Configuration errors:\n" + "\n".join(f"  - {e}" for e in errors)
             )
 
-        # Initialize components
-        print("Initializing Audio Transcription Pipeline...")
-        print("=" * 80)
+        print("Initializing Audio Transcription Pipeline...", flush=True)
+        print("=" * 80, flush=True)
 
         self.audio_processor = AudioProcessor()
         self.diarizer = SpeakerDiarizer()
         self.transcriber = WhisperTranscriber(whisper_model)
         self.summarizer = AISummarizer() if enable_summary else None
-
         self.language = language or Config.LANGUAGE
 
-        print("=" * 80)
-        print("Pipeline initialized successfully")
-        print()
+        print("=" * 80, flush=True)
+        print("Pipeline initialized successfully\n", flush=True)
 
     def process(
         self,
@@ -63,70 +83,52 @@ class AudioTranscriptionPipeline:
         max_speakers: Optional[int] = None,
         include_summary: bool = True
     ) -> Dict[str, any]:
-        """
-        Process audio through complete pipeline - PURE IN-MEMORY with TIMING
+        """Process audio with REAL-TIME progress tracking"""
 
-        Args:
-            audio_input: Audio bytes or file-like object
-            num_speakers: Exact number of speakers (if known)
-            min_speakers: Minimum number of speakers
-            max_speakers: Maximum number of speakers
-            include_summary: Whether to generate AI summary
-
-        Returns:
-            Dictionary containing results with timing info (ready for API response)
-
-        Raises:
-            AudioTranscriptionError: If processing fails
-        """
-        # Track timing for each step
         timings = {}
         total_start = time.time()
 
         try:
-            print("\n" + "=" * 80)
-            print("STARTING AUDIO TRANSCRIPTION")
-            print("=" * 80)
+            print("\n" + "=" * 80, flush=True)
+            print("STARTING AUDIO TRANSCRIPTION", flush=True)
+            print("=" * 80, flush=True)
 
-            # Step 1: Validate audio
-            step_start = time.time()
-            print("\n[1/5] Validating audio...")
+            # Step 1: Validate audio WITH LIVE TIMER
+            timer = ProgressTimer("[1/5] Validating audio")
+            timer.start()
             audio_info = self.audio_processor.validate_audio(audio_input)
-            timings['validation'] = time.time() - step_start
-            print(f"✓ Audio validated: {audio_info['duration_minutes']:.2f} minutes")
-            print(f"⏱️  Time: {timings['validation']:.2f}s")
+            timings['validation'] = timer.stop()
+            print(f"    Duration: {audio_info['duration_minutes']:.2f} minutes\n", flush=True)
 
-            # Step 2: Prepare audio for processing - IN MEMORY
-            step_start = time.time()
-            print("\n[2/5] Preparing audio (in-memory)...")
+            # Step 2: Prepare audio WITH LIVE TIMER
+            timer = ProgressTimer("[2/5] Preparing audio (in-memory)")
+            timer.start()
 
-            # Prepare for Whisper (tensor)
             audio_tensor, sample_rate = self.audio_processor.prepare_for_processing(audio_input)
-            print(f"✓ Audio tensor prepared: {audio_tensor.shape}")
-
-            # Prepare for Diarization (WAV bytes)
             wav_bytes = self.audio_processor.prepare_wav_bytes(audio_input)
-            print(f"✓ WAV bytes prepared for diarization")
 
-            timings['preparation'] = time.time() - step_start
-            print(f"⏱️  Time: {timings['preparation']:.2f}s")
+            timings['preparation'] = timer.stop()
+            print(f"    Tensor: {audio_tensor.shape}\n", flush=True)
 
-            # Step 3: Speaker diarization - IN MEMORY
-            step_start = time.time()
-            print("\n[3/5] Performing speaker diarization...")
+            # Step 3: Speaker diarization WITH LIVE TIMER
+            timer = ProgressTimer("[3/5] Speaker diarization")
+            timer.start()
+
             diarization_segments = self.diarizer.diarize(
                 wav_bytes,
                 num_speakers=num_speakers,
                 min_speakers=min_speakers,
                 max_speakers=max_speakers
             )
-            timings['diarization'] = time.time() - step_start
-            print(f"✓ Diarization complete: {len(diarization_segments)} segments")
-            print(f"⏱️  Time: {timings['diarization']:.2f}s")
 
-            # Step 4: Transcription - IN MEMORY
-            step_start = time.time()
-            print("\n[4/5] Transcribing audio...")
+            timings['diarization'] = timer.stop()
+            num_spk = len(set(s['speaker'] for s in diarization_segments))
+            print(f"    Found {num_spk} speakers, {len(diarization_segments)} segments\n", flush=True)
+
+            # Step 4: Transcription WITH LIVE TIMER
+            timer = ProgressTimer("[4/5] Transcribing audio")
+            timer.start()
+
             transcribed_segments = self.transcriber.transcribe_with_speakers(
                 audio_tensor,
                 sample_rate,
@@ -134,19 +136,17 @@ class AudioTranscriptionPipeline:
                 language=self.language
             )
 
-            # Merge consecutive segments
-            merged_segments = self.transcriber.merge_consecutive_segments(
-                transcribed_segments
-            )
-            timings['transcription'] = time.time() - step_start
-            print(f"✓ Transcription complete: {len(merged_segments)} final segments")
-            print(f"⏱️  Time: {timings['transcription']:.2f}s")
+            merged_segments = self.transcriber.merge_consecutive_segments(transcribed_segments)
 
-            # Step 5: Generate summary
+            timings['transcription'] = timer.stop()
+            print(f"    Segments: {len(merged_segments)} final\n", flush=True)
+
+            # Step 5: AI Summary WITH LIVE TIMER
             summary = None
             if include_summary and self.summarizer and self.summarizer.is_available():
-                step_start = time.time()
-                print("\n[5/5] Generating concise AI summary...")
+                timer = ProgressTimer("[5/5] Generating AI summary")
+                timer.start()
+
                 statistics = TranscriptFormatter.calculate_statistics(merged_segments)
                 transcript_text = TranscriptFormatter.format_segments_to_text(
                     merged_segments,
@@ -157,27 +157,23 @@ class AudioTranscriptionPipeline:
                     statistics,
                     language=self.language
                 )
-                timings['summarization'] = time.time() - step_start
-                print("✓ Summary generated")
-                print(f"⏱️  Time: {timings['summarization']:.2f}s")
+
+                timings['summarization'] = timer.stop()
             else:
-                print("\n[5/5] Skipping AI summary")
+                print("\n[5/5] Skipping AI summary", flush=True)
                 timings['summarization'] = 0
 
-            # Calculate final statistics
+            # Final stats
             statistics = TranscriptFormatter.calculate_statistics(merged_segments)
-
-            # Total time
             timings['total'] = time.time() - total_start
 
-            # Display timing summary
+            # Display summary
             self._display_timing_summary(timings)
 
-            print("\n" + "=" * 80)
-            print("PROCESSING COMPLETE")
-            print("=" * 80)
+            print("\n" + "=" * 80, flush=True)
+            print("✓ PROCESSING COMPLETE", flush=True)
+            print("=" * 80, flush=True)
 
-            # Return result - READY FOR API RESPONSE
             return {
                 'success': True,
                 'audio_info': audio_info,
@@ -188,14 +184,14 @@ class AudioTranscriptionPipeline:
             }
 
         except Exception as e:
-            print(f"\n❌ ERROR: {str(e)}")
+            print(f"\n✗ ERROR: {str(e)}", flush=True)
             raise
 
     def _display_timing_summary(self, timings: Dict[str, float]):
-        """Display detailed timing summary in console"""
-        print("\n" + "=" * 80)
-        print("TIMING BREAKDOWN")
-        print("=" * 80)
+        """Display timing breakdown"""
+        print("\n" + "=" * 80, flush=True)
+        print("TIMING BREAKDOWN", flush=True)
+        print("=" * 80, flush=True)
 
         steps = [
             ('validation', '1. Audio Validation'),
@@ -210,10 +206,10 @@ class AudioTranscriptionPipeline:
         for key, label in steps:
             duration = timings.get(key, 0)
             percentage = (duration / total * 100) if total > 0 else 0
-            bar_length = int(percentage / 2)  # Scale to 50 chars max
+            bar_length = int(percentage / 2)
             bar = '█' * bar_length + '░' * (50 - bar_length)
-            print(f"{label:.<30} {duration:>6.2f}s [{bar}] {percentage:>5.1f}%")
+            print(f"{label:.<30} {duration:>6.2f}s [{bar}] {percentage:>5.1f}%", flush=True)
 
-        print("-" * 80)
-        print(f"{'TOTAL TIME':.<30} {total:>6.2f}s")
-        print("=" * 80)
+        print("-" * 80, flush=True)
+        print(f"{'TOTAL TIME':.<30} {total:>6.2f}s", flush=True)
+        print("=" * 80, flush=True)
