@@ -54,24 +54,27 @@ USER appuser
 ENV PYTHONUNBUFFERED=1
 ENV CUDA_VISIBLE_DEVICES=0
 ENV FLASK_ENV=production
+ENV CUDA_LAUNCH_BLOCKING=0
+ENV TORCH_ALLOW_TF32=1
 
 # Expose port
 EXPOSE 8000
 
-# Healthcheck - increased start_period for model loading
+# Healthcheck
 HEALTHCHECK --interval=30s --timeout=10s --start-period=180s --retries=3 \
   CMD curl -f http://localhost:8000/health || exit 1
 
-# Run with Gunicorn using SYNC workers
+# Run with Gunicorn
 CMD ["gunicorn", \
      "--bind", "0.0.0.0:8000", \
-     "--workers", "1", \
+     "--workers", "2", \
      "--worker-class", "sync", \
      "--timeout", "900", \
-     "--max-requests", "100", \
-     "--max-requests-jitter", "10", \
+     "--max-requests", "200", \
+     "--max-requests-jitter", "20", \
+     "--worker-tmp-dir", "/dev/shm", \
      "--access-logfile", "-", \
      "--error-logfile", "-", \
      "--log-level", "info", \
-     "--preload", \
+     "--config", "gunicorn.py", \
      "wsgi:app"]

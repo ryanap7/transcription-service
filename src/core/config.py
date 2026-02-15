@@ -1,6 +1,6 @@
 """
-Configuration module for Audio Transcription System - CLEAN VERSION
-No file directories needed - pure in-memory processing
+Configuration module for Audio Transcription System
+Tesla V100 32GB Optimized
 """
 import os
 from pathlib import Path
@@ -11,19 +11,19 @@ load_dotenv()
 
 
 class Config:
-    """Application configuration - Pure in-memory, no file operations"""
+    """Application configuration - Optimized for Tesla V100"""
 
-    # Base director
+    # Base directory
     BASE_DIR = Path(__file__).parent.parent.parent
 
     # Audio settings
     TARGET_SAMPLE_RATE = 16000
     NORMALIZE_DB = -20.0
-    MAX_AUDIO_SIZE_MB = 500
+    MAX_AUDIO_SIZE_MB = int(os.getenv('MAX_AUDIO_SIZE_MB', '1000'))
     SUPPORTED_FORMATS = {'.mp3', '.wav', '.m4a', '.flac', '.ogg', '.opus', '.webm'}
 
     # Model settings
-    WHISPER_MODEL = os.getenv('WHISPER_MODEL', 'base')
+    WHISPER_MODEL = os.getenv('WHISPER_MODEL', 'large-v3')
     LANGUAGE = os.getenv('LANGUAGE', 'id')
 
     # API Keys

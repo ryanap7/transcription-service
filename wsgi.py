@@ -1,60 +1,36 @@
 #!/usr/bin/env python3
 """
-WSGI Entry Point - Preload AI models with post-fork CUDA initialization
-Handles CUDA fork safety for Gunicorn workers
+WSGI Entry Point - Lazy CUDA initialization for fork safety
+Models are loaded AFTER worker fork to avoid CUDA context issues
 """
 import sys
 import os
 
-# Set multiprocessing start method to 'spawn' for CUDA compatibility
-import torch.multiprocessing as mp
-try:
-    mp.set_start_method('spawn', force=True)
-except RuntimeError:
-    pass
-
 print("=" * 80)
-print("SIMTELPAS AI - Preloading Models...")
+print("SIMTELPAS AI - Starting (Post-Fork CUDA Init)...")
 print("=" * 80)
 
 # Load configuration
-print("\n[1/3] Loading configuration...")
+print("\n[1/2] Loading configuration...")
 from src.core.config import Config
 print(f"✓ Model: {Config.WHISPER_MODEL}")
 print(f"✓ Language: {Config.LANGUAGE}")
 
-# Import modules but DON'T initialize CUDA yet
-print("\n[2/3] Preparing pipeline (CUDA will init after fork)...")
-from src.utils.pipeline import AudioTranscriptionPipeline
+# Import Flask app (NO CUDA initialization yet)
+print("\n[2/2] Loading Flask application...")
 
-# Create pipeline instance but models will load lazily in workers
-global_pipeline = AudioTranscriptionPipeline()
-
-print("✓ Pipeline structure ready")
-
-# Inject pipeline into Flask app
-print("\n[3/3] Loading Flask application...")
+# Import api module
 import src.api.api as api_module
-api_module.pipeline = global_pipeline
-print("✓ Pipeline injected into Flask app")
+
+# Pipeline will be None initially
+api_module.pipeline = None
 
 # Import Flask app
 from src.api.api import app
 
 print("\n" + "=" * 80)
-print("✓ Ready to accept requests!")
-print("✓ CUDA models will initialize in workers after fork")
+print("✓ App loaded - Pipeline will init in workers after fork")
 print("=" * 80)
 print()
 
-# Gunicorn post_fork hook to reinitialize CUDA in workers
-def post_fork(server, worker):
-    """
-    Called after worker process is forked
-    Reinitialize CUDA-dependent components here
-    """
-    import torch
-    if torch.cuda.is_available():
-        # Clear CUDA cache
-        torch.cuda.empty_cache()
-        print(f"Worker {worker.pid}: CUDA reinitialized")
+pipeline_initialized = False
