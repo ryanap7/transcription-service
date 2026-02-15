@@ -1,5 +1,5 @@
 """
-AI-powered summarization using Anthropic Claude - Optimized for concise output
+AI Summarization - SILENT version
 """
 from typing import Optional, Dict
 import anthropic
@@ -9,23 +9,15 @@ from src.core.exceptions import SummarizationError
 
 
 class AISummarizer:
-    """Generate concise summaries using Anthropic Claude"""
+    """Generate summaries - silent processing"""
 
     def __init__(self, api_key: Optional[str] = None):
-        """
-        Initialize summarizer
-
-        Args:
-            api_key: Anthropic API key (uses config if not provided)
-        """
         self.api_key = api_key or Config.ANTHROPIC_API_KEY
         self.client = None
-
         if self.api_key:
             self.client = anthropic.Anthropic(api_key=self.api_key)
 
     def is_available(self) -> bool:
-        """Check if summarizer is available"""
         return self.client is not None
 
     def create_summary(
@@ -34,55 +26,31 @@ class AISummarizer:
         statistics: Dict[str, any],
         language: str = 'id'
     ) -> Optional[str]:
-        """
-        Create concise AI summary of transcript - OPTIMIZED
-
-        Args:
-            transcript: Full transcript text
-            statistics: Statistics about the transcript
-            language: Output language ('id' for Indonesian, 'en' for English)
-
-        Returns:
-            Concise summary text or None if unavailable
-
-        Raises:
-            SummarizationError: If summarization fails
-        """
         if not self.is_available():
-            print("AI summarization not available (no API key)")
             return None
 
         try:
-            print("Generating AI summary...")
+            # NO PRINT - silent processing
 
-            # Prepare concise prompt based on language
             if language == 'id':
                 prompt = self._create_indonesian_prompt(transcript, statistics)
             else:
                 prompt = self._create_english_prompt(transcript, statistics)
 
-            # Call Claude API with reduced max_tokens for faster response
             message = self.client.messages.create(
                 model="claude-sonnet-4-20250514",
-                max_tokens=800,  # Reduced from 2000 for shorter, faster summaries
-                temperature=0,  # Deterministic for speed
-                messages=[
-                    {"role": "user", "content": prompt}
-                ]
+                max_tokens=800,
+                temperature=0,
+                messages=[{"role": "user", "content": prompt}]
             )
 
-            summary = message.content[0].text
-            print("Summary generated successfully")
-
-            return summary
+            return message.content[0].text
 
         except Exception as e:
             raise SummarizationError(f"Failed to generate summary: {str(e)}")
 
     @staticmethod
     def _create_indonesian_prompt(transcript: str, statistics: Dict) -> str:
-        """Create concise Indonesian prompt - OPTIMIZED"""
-        # Limit transcript length for faster processing
         max_chars = 8000
         if len(transcript) > max_chars:
             transcript = transcript[:max_chars] + "..."
@@ -111,8 +79,6 @@ Format:
 
     @staticmethod
     def _create_english_prompt(transcript: str, statistics: Dict) -> str:
-        """Create concise English prompt - OPTIMIZED"""
-        # Limit transcript length for faster processing
         max_chars = 8000
         if len(transcript) > max_chars:
             transcript = transcript[:max_chars] + "..."
@@ -146,28 +112,14 @@ Format:
         meeting_type: str = 'general',
         language: str = 'id'
     ) -> Optional[str]:
-        """
-        Create concise meeting-specific summary - OPTIMIZED
-
-        Args:
-            transcript: Full transcript
-            statistics: Transcript statistics
-            meeting_type: Type of meeting ('general', 'standup', 'interview', etc.)
-            language: Output language
-
-        Returns:
-            Summary text or None if unavailable
-        """
         if not self.is_available():
             return None
 
         try:
-            # Limit transcript length
             max_chars = 8000
             if len(transcript) > max_chars:
                 transcript = transcript[:max_chars] + "..."
 
-            # Customize prompt based on meeting type
             prompts = {
                 'standup': self._standup_prompt(transcript, statistics, language),
                 'interview': self._interview_prompt(transcript, statistics, language),
@@ -178,7 +130,7 @@ Format:
 
             message = self.client.messages.create(
                 model="claude-sonnet-4-20250514",
-                max_tokens=600,  # Even shorter for specific meeting types
+                max_tokens=600,
                 temperature=0,
                 messages=[{"role": "user", "content": prompt}]
             )
@@ -190,7 +142,6 @@ Format:
 
     @staticmethod
     def _standup_prompt(transcript: str, statistics: Dict, language: str) -> str:
-        """Concise prompt for standup meeting"""
         if language == 'id':
             return f"""Ringkas standup meeting ini SINGKAT:
 
@@ -212,7 +163,6 @@ Format (max 3-4 sentences per speaker):
 
     @staticmethod
     def _interview_prompt(transcript: str, statistics: Dict, language: str) -> str:
-        """Concise prompt for interview"""
         if language == 'id':
             return f"""Ringkas interview ini SINGKAT (maksimal 6 kalimat):
 
@@ -234,7 +184,6 @@ Focus on:
 
     @staticmethod
     def _general_meeting_prompt(transcript: str, statistics: Dict, language: str) -> str:
-        """Concise prompt for general meeting"""
         if language == 'id':
             return f"""Ringkas meeting ini SINGKAT (maksimal 5-6 kalimat):
 

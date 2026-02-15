@@ -56,6 +56,8 @@ class WhisperTranscriber:
         try:
             language = language or Config.LANGUAGE
 
+            # NO PRINT HERE - spinner is active!
+
             if isinstance(audio_tensor, torch.Tensor):
                 if audio_tensor.dim() == 2:
                     audio_tensor = audio_tensor.squeeze(0)
@@ -73,7 +75,7 @@ class WhisperTranscriber:
                 audio_np,
                 language=language,
                 task=task,
-                verbose=False,
+                verbose=False,  # CRITICAL: No verbose output!
                 fp16=torch.cuda.is_available(),
                 condition_on_previous_text=False,
                 temperature=0.0,

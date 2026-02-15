@@ -1,11 +1,9 @@
 """
-Main audio transcription pipeline with CLEAN REAL-TIME PROGRESS
-Uses spinner animation instead of timer to avoid text conflicts
+FINAL CLEAN VERSION - Perfect Output
+No spinner conflicts, just clean step-by-step progress
 """
 import time
-import sys
 from typing import Dict, Optional, Union, BinaryIO
-from threading import Thread
 
 from src.core.config import Config
 from src.core.exceptions import *
@@ -16,49 +14,8 @@ from src.services.summarizer import AISummarizer
 from src.utils.formatter import TranscriptFormatter
 
 
-class SpinnerProgress:
-    """Clean spinner progress indicator"""
-
-    SPINNERS = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
-
-    def __init__(self, message: str):
-        self.message = message
-        self.start_time = time.time()
-        self.running = False
-        self.thread = None
-        self.idx = 0
-
-    def _spin(self):
-        """Animate spinner"""
-        while self.running:
-            elapsed = time.time() - self.start_time
-            spinner = self.SPINNERS[self.idx % len(self.SPINNERS)]
-            print(f"\r  {spinner} {self.message} ({elapsed:.0f}s)", end='', flush=True)
-            self.idx += 1
-            time.sleep(0.1)
-
-    def start(self):
-        """Start spinner"""
-        print(f"\n{self.message}", flush=True)
-        self.running = True
-        self.thread = Thread(target=self._spin, daemon=True)
-        self.thread.start()
-
-    def stop(self, success=True):
-        """Stop spinner and show result"""
-        self.running = False
-        if self.thread:
-            self.thread.join()
-
-        elapsed = time.time() - self.start_time
-        symbol = '✓' if success else '✗'
-        # Clear spinner line and print final result
-        print(f"\r  {symbol} {self.message} - {elapsed:.2f}s" + " " * 20, flush=True)
-        return elapsed
-
-
 class AudioTranscriptionPipeline:
-    """Complete audio transcription pipeline with clean progress"""
+    """Audio transcription with clean output"""
 
     def __init__(
         self,
@@ -66,7 +23,6 @@ class AudioTranscriptionPipeline:
         language: Optional[str] = None,
         enable_summary: bool = True
     ):
-        """Initialize pipeline"""
         is_valid, errors = Config.validate()
         if not is_valid:
             raise ConfigurationError(
@@ -84,7 +40,7 @@ class AudioTranscriptionPipeline:
         self.language = language or Config.LANGUAGE
 
         print("=" * 80, flush=True)
-        print("✓ Pipeline ready", flush=True)
+        print("✓ Pipeline ready\n", flush=True)
 
     def process(
         self,
@@ -94,7 +50,6 @@ class AudioTranscriptionPipeline:
         max_speakers: Optional[int] = None,
         include_summary: bool = True
     ) -> Dict[str, any]:
-        """Process audio with clean real-time progress"""
 
         timings = {}
         total_start = time.time()
@@ -104,37 +59,40 @@ class AudioTranscriptionPipeline:
             print("STARTING AUDIO TRANSCRIPTION", flush=True)
             print("=" * 80, flush=True)
 
-            # Validate
-            spinner = SpinnerProgress("[1/5] Validating audio")
-            spinner.start()
+            # Step 1
+            print("\n[1/5] Validating audio", flush=True)
+            step_start = time.time()
             audio_info = self.audio_processor.validate_audio(audio_input)
-            timings['validation'] = spinner.stop()
-            print(f"      Duration: {audio_info['duration_minutes']:.2f} minutes", flush=True)
+            timings['validation'] = time.time() - step_start
+            print(f"✓ [1/5] Validated - {timings['validation']:.2f}s", flush=True)
+            print(f"    Duration: {audio_info['duration_minutes']:.2f} minutes", flush=True)
 
-            # Prepare
-            spinner = SpinnerProgress("[2/5] Preparing audio")
-            spinner.start()
+            # Step 2
+            print("\n[2/5] Preparing audio", flush=True)
+            step_start = time.time()
             audio_tensor, sample_rate = self.audio_processor.prepare_for_processing(audio_input)
             wav_bytes = self.audio_processor.prepare_wav_bytes(audio_input)
-            timings['preparation'] = spinner.stop()
-            print(f"      Tensor: {audio_tensor.shape}", flush=True)
+            timings['preparation'] = time.time() - step_start
+            print(f"✓ [2/5] Prepared - {timings['preparation']:.2f}s", flush=True)
+            print(f"    Tensor: {audio_tensor.shape}", flush=True)
 
-            # Diarization
-            spinner = SpinnerProgress("[3/5] Speaker diarization")
-            spinner.start()
+            # Step 3
+            print("\n[3/5] Speaker diarization", flush=True)
+            step_start = time.time()
             diarization_segments = self.diarizer.diarize(
                 wav_bytes,
                 num_speakers=num_speakers,
                 min_speakers=min_speakers,
                 max_speakers=max_speakers
             )
-            timings['diarization'] = spinner.stop()
+            timings['diarization'] = time.time() - step_start
             num_spk = len(set(s['speaker'] for s in diarization_segments))
-            print(f"      Found {num_spk} speakers in {len(diarization_segments)} segments", flush=True)
+            print(f"✓ [3/5] Diarization complete - {timings['diarization']:.2f}s", flush=True)
+            print(f"    Found {num_spk} speakers in {len(diarization_segments)} segments", flush=True)
 
-            # Transcription
-            spinner = SpinnerProgress("[4/5] Transcribing audio")
-            spinner.start()
+            # Step 4
+            print("\n[4/5] Transcribing audio", flush=True)
+            step_start = time.time()
             transcribed_segments = self.transcriber.transcribe_with_speakers(
                 audio_tensor,
                 sample_rate,
@@ -142,14 +100,15 @@ class AudioTranscriptionPipeline:
                 language=self.language
             )
             merged_segments = self.transcriber.merge_consecutive_segments(transcribed_segments)
-            timings['transcription'] = spinner.stop()
-            print(f"      Generated {len(merged_segments)} final segments", flush=True)
+            timings['transcription'] = time.time() - step_start
+            print(f"✓ [4/5] Transcription complete - {timings['transcription']:.2f}s", flush=True)
+            print(f"    Generated {len(merged_segments)} final segments", flush=True)
 
-            # Summary
+            # Step 5
             summary = None
             if include_summary and self.summarizer and self.summarizer.is_available():
-                spinner = SpinnerProgress("[5/5] Generating AI summary")
-                spinner.start()
+                print("\n[5/5] Generating AI summary", flush=True)
+                step_start = time.time()
                 statistics = TranscriptFormatter.calculate_statistics(merged_segments)
                 transcript_text = TranscriptFormatter.format_segments_to_text(
                     merged_segments,
@@ -160,16 +119,15 @@ class AudioTranscriptionPipeline:
                     statistics,
                     language=self.language
                 )
-                timings['summarization'] = spinner.stop()
+                timings['summarization'] = time.time() - step_start
+                print(f"✓ [5/5] Summary generated - {timings['summarization']:.2f}s", flush=True)
             else:
                 print("\n[5/5] Skipping AI summary", flush=True)
                 timings['summarization'] = 0
 
-            # Final stats
             statistics = TranscriptFormatter.calculate_statistics(merged_segments)
             timings['total'] = time.time() - total_start
 
-            # Display summary
             self._display_timing_summary(timings)
 
             print("\n" + "=" * 80, flush=True)
@@ -190,7 +148,6 @@ class AudioTranscriptionPipeline:
             raise
 
     def _display_timing_summary(self, timings: Dict[str, float]):
-        """Display clean timing breakdown"""
         print("\n" + "=" * 80, flush=True)
         print("TIMING BREAKDOWN", flush=True)
         print("=" * 80, flush=True)
