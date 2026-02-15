@@ -84,7 +84,7 @@ class AudioTranscriptionPipeline:
         self.language = language or Config.LANGUAGE
 
         print("=" * 80, flush=True)
-        print("✓ Pipeline ready\n", flush=True)
+        print("✓ Pipeline ready", flush=True)
 
     def process(
         self,

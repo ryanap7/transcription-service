@@ -1,5 +1,6 @@
 """
-Speech transcription using OpenAI Whisper - WITH DOWNLOAD PROGRESS
+Speech transcription using OpenAI Whisper - CLEAN OUTPUT
+No prints during processing to avoid conflicts with spinner
 """
 from typing import List, Dict, Optional
 import whisper
@@ -15,36 +16,31 @@ class WhisperTranscriber:
     """Speech-to-text transcription using Whisper"""
 
     def __init__(self, model_size: Optional[str] = None):
-        """Initialize transcriber with download progress"""
+        """Initialize transcriber"""
         self.model_size = model_size or Config.WHISPER_MODEL
         self.model = None
         self._load_model()
 
     def _load_model(self):
-        """Load Whisper model WITH DOWNLOAD PROGRESS BAR"""
+        """Load Whisper model with download progress"""
         try:
-            # Enable tqdm progress bar for downloads
-            os.environ['TQDM_DISABLE'] = '0'  # Force enable tqdm
+            # Enable download progress bar
+            os.environ['TQDM_DISABLE'] = '0'
 
             print(f"Loading Whisper model: {self.model_size}...", flush=True)
 
-            # Whisper automatically shows download progress via tqdm
-            # if the model needs to be downloaded
             self.model = whisper.load_model(
                 self.model_size,
-                download_root=None,  # Use default cache (~/.cache/whisper)
-                in_memory=False      # Allow disk caching
+                download_root=None,
+                in_memory=False
             )
 
-            # Enable GPU optimizations
             if torch.cuda.is_available():
-                print("✓ Using GPU for transcription", flush=True)
+                print("Using GPU for transcription", flush=True)
                 torch.backends.cuda.matmul.allow_tf32 = True
                 torch.backends.cudnn.allow_tf32 = True
-            else:
-                print("✓ Using CPU for transcription", flush=True)
 
-            print("✓ Whisper model loaded successfully", flush=True)
+            print("Whisper model loaded successfully", flush=True)
 
         except Exception as e:
             raise ModelLoadError(f"Failed to load Whisper model: {str(e)}")
@@ -56,11 +52,9 @@ class WhisperTranscriber:
         language: Optional[str] = None,
         task: str = 'transcribe'
     ) -> Dict[str, any]:
-        """Transcribe audio from tensor"""
+        """Transcribe audio - SILENT during processing"""
         try:
             language = language or Config.LANGUAGE
-
-            print(f"  Transcribing (language: {language})...", end='', flush=True)
 
             if isinstance(audio_tensor, torch.Tensor):
                 if audio_tensor.dim() == 2:
@@ -90,7 +84,7 @@ class WhisperTranscriber:
                 logprob_threshold=-1.0,
             )
 
-            print(f" {len(result['segments'])} segments", flush=True)
+            # NO PRINT HERE - let pipeline handle it
             return result
 
         except Exception as e:
@@ -103,15 +97,16 @@ class WhisperTranscriber:
         diarization_segments: List[Dict],
         language: Optional[str] = None
     ) -> List[Dict[str, any]]:
-        """Transcribe with speaker labels"""
+        """Transcribe with speakers - SILENT"""
         try:
+            # Get transcription (silent)
             result = self.transcribe_tensor(audio_tensor, sample_rate, language)
             whisper_segments = result['segments']
 
-            print(f"  Aligning {len(whisper_segments)} segments...", end='', flush=True)
+            # Align segments (silent)
             aligned = self._align_segments(whisper_segments, diarization_segments)
-            print(f" {len(aligned)} aligned", flush=True)
 
+            # NO PRINTS - pipeline will show final count
             return aligned
 
         except Exception as e:
@@ -122,7 +117,7 @@ class WhisperTranscriber:
         whisper_segments: List[Dict],
         diarization_segments: List[Dict]
     ) -> List[Dict[str, any]]:
-        """Align Whisper segments with diarization"""
+        """Align segments - SILENT"""
         aligned = []
 
         for dia_seg in diarization_segments:
@@ -156,6 +151,7 @@ class WhisperTranscriber:
                     'text': combined_text
                 })
 
+        # NO PRINT - silent
         return aligned
 
     @staticmethod
@@ -163,7 +159,7 @@ class WhisperTranscriber:
         segments: List[Dict],
         gap_threshold: Optional[float] = None
     ) -> List[Dict]:
-        """Merge consecutive segments from same speaker"""
+        """Merge segments - SILENT"""
         if not segments:
             return []
 
@@ -185,5 +181,5 @@ class WhisperTranscriber:
 
         merged.append(current)
 
-        print(f"  Merged to {len(merged)} segments", flush=True)
+        # NO PRINT - pipeline shows final count
         return merged
