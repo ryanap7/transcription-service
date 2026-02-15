@@ -1,6 +1,6 @@
 """
-REST API for Audio Transcription Service - CLEAN VERSION
-Pure in-memory processing, single endpoint, no file operations
+REST API for Audio Transcription Service - PRODUCTION VERSION
+Pure in-memory processing with preloaded pipeline
 """
 from flask import Flask, request, jsonify
 from flask_swagger_ui import get_swaggerui_blueprint
@@ -12,7 +12,6 @@ from pathlib import Path
 from io import BytesIO
 
 from src.core.config import Config
-from src.utils.pipeline import AudioTranscriptionPipeline
 from src.core.exceptions import *
 
 
@@ -39,17 +38,40 @@ swaggerui_blueprint = get_swaggerui_blueprint(
 
 app.register_blueprint(swaggerui_blueprint, url_prefix=SWAGGER_URL)
 
-# Initialize pipeline (singleton)
+# ============================================================================
+# PIPELINE INITIALIZATION
+# ============================================================================
+# Pipeline will be injected by wsgi.py (production) or initialized by run.py (dev)
+# DO NOT create pipeline here - it will be set externally
 pipeline = None
 
 
 def get_pipeline():
-    """Get or create pipeline instance"""
+    """
+    Get pipeline instance
+
+    Pipeline must be initialized externally:
+    - In production: wsgi.py injects preloaded pipeline
+    - In development: run.py initializes and injects pipeline
+
+    Returns:
+        AudioTranscriptionPipeline instance
+
+    Raises:
+        RuntimeError: If pipeline not initialized
+    """
     global pipeline
     if pipeline is None:
-        pipeline = AudioTranscriptionPipeline()
+        raise RuntimeError(
+            "Pipeline not initialized! "
+            "Run via 'gunicorn wsgi:app' (production) or 'python run.py' (development)"
+        )
     return pipeline
 
+
+# ============================================================================
+# API ENDPOINTS
+# ============================================================================
 
 @app.route('/api/swagger.json')
 def swagger_spec():
@@ -187,112 +209,70 @@ def swagger_spec():
                             }
                         },
                         "400": {
-                            "description": "Bad request",
-                            "content": {
-                                "application/json": {
-                                    "schema": {
-                                        "type": "object",
-                                        "properties": {
-                                            "success": {"type": "boolean", "example": False},
-                                            "message": {"type": "string", "example": "No file provided"},
-                                            "data": {"type": "null"}
-                                        }
-                                    }
-                                }
-                            }
+                            "description": "Bad request"
                         },
                         "413": {
-                            "description": "File too large",
-                            "content": {
-                                "application/json": {
-                                    "schema": {
-                                        "type": "object",
-                                        "properties": {
-                                            "success": {"type": "boolean", "example": False},
-                                            "message": {"type": "string", "example": "File too large. Maximum: 500MB"},
-                                            "data": {"type": "null"}
-                                        }
-                                    }
-                                }
-                            }
+                            "description": "File too large"
                         },
                         "500": {
-                            "description": "Internal server error",
-                            "content": {
-                                "application/json": {
-                                    "schema": {
-                                        "type": "object",
-                                        "properties": {
-                                            "success": {"type": "boolean", "example": False},
-                                            "message": {"type": "string", "example": "Internal server error"},
-                                            "data": {"type": "null"}
-                                        }
-                                    }
-                                }
-                            }
+                            "description": "Internal server error"
                         }
                     }
                 }
             }
-        },
-        "tags": [
-            {
-                "name": "System",
-                "description": "System & health endpoints"
-            },
-            {
-                "name": "Transcription",
-                "description": "Audio transcription dengan speaker diarization, AI summary, dan timing info"
-            }
-        ]
+        }
     }
-
     return jsonify(spec)
 
 
 @app.route('/health', methods=['GET'])
-def health_check():
+def health():
     """Health check endpoint"""
-    from datetime import datetime
     import torch
+    from datetime import datetime
 
-    dependencies = {
-        'whisper': 'loaded',
-        'diarizer': 'loaded',
-        'gpu': 'available' if torch.cuda.is_available() else 'unavailable'
-    }
+    try:
+        # Check if pipeline is initialized
+        pipe = get_pipeline()
 
-    return jsonify({
-        'status': 'healthy',
-        'service': 'SIMTELPAS AI',
-        'version': '1.0.0',
-        'timestamp': datetime.now().isoformat(),
-        'dependencies': dependencies
-    })
+        health_data = {
+            'status': 'healthy',
+            'service': 'SIMTELPAS AI - Audio Transcription',
+            'version': '2.0.0',
+            'timestamp': datetime.utcnow().isoformat() + 'Z',
+            'dependencies': {
+                'pipeline': 'loaded',
+                'whisper': 'loaded',
+                'diarizer': 'loaded',
+                'gpu': 'available' if torch.cuda.is_available() else 'unavailable'
+            }
+        }
+
+        return jsonify(health_data), 200
+
+    except Exception as e:
+        return jsonify({
+            'status': 'unhealthy',
+            'service': 'SIMTELPAS AI - Audio Transcription',
+            'version': '2.0.0',
+            'timestamp': datetime.utcnow().isoformat() + 'Z',
+            'error': str(e)
+        }), 500
 
 
 @app.route('/transcribe', methods=['POST'])
 def transcribe():
     """
-    Transcribe audio file - OPTIMIZED with TIMING
-    Pure in-memory processing, direct JSON response
-
-    Form data:
-        - file: Audio file (required)
-        - num_speakers: Exact number of speakers (optional)
-        - include_summary: true/false (optional, default: true)
-        - detailed_segments: true/false (optional, default: false)
-
-    Returns:
-        JSON response with transcript, summary, and timing info
+    Transcribe audio with speaker diarization and AI summary
+    Pure in-memory processing with detailed timing info
     """
     request_start = time.time()
 
     try:
-        # Track file upload time
+        # Track upload time
         upload_start = time.time()
 
-        # Check if file is present
+        # Get file from request
         if 'file' not in request.files:
             return jsonify({
                 'success': False,
@@ -305,26 +285,24 @@ def transcribe():
         if file.filename == '':
             return jsonify({
                 'success': False,
-                'message': 'Empty filename',
+                'message': 'No file selected',
                 'data': None
             }), 400
 
-        # Get optional parameters
+        # Get parameters
         num_speakers = request.form.get('num_speakers', type=int)
         include_summary = request.form.get('include_summary', 'true').lower() == 'true'
         detailed_segments = request.form.get('detailed_segments', 'false').lower() == 'true'
 
-        # Read file content into memory
-        file.stream.seek(0)
-        file_content = file.stream.read()
-
+        # Read file into memory
+        file_content = file.read()
         upload_time = time.time() - upload_start
 
-        # Validate file is not empty
+        # Validate file not empty
         if len(file_content) == 0:
             return jsonify({
                 'success': False,
-                'message': 'File is empty',
+                'message': 'Empty file',
                 'data': None
             }), 400
 
@@ -337,8 +315,10 @@ def transcribe():
                 'data': None
             }), 413
 
-        # Process audio - PURE IN-MEMORY (NO FILE SAVING)
+        # Get preloaded pipeline (NO LOADING HERE!)
         pipe = get_pipeline()
+
+        # Process audio - PURE IN-MEMORY (NO FILE SAVING)
         audio_stream = BytesIO(file_content)
 
         result = pipe.process(
@@ -486,7 +466,10 @@ def internal_error(e):
 
 
 def main():
-    """Run Flask development server"""
+    """
+    Run Flask development server
+    This is used by run.py for local development
+    """
     # Validate configuration
     is_valid, errors = Config.validate()
     if not is_valid:
@@ -497,11 +480,11 @@ def main():
 
     # Run server
     host = os.getenv('API_HOST', '0.0.0.0')
-    port = int(os.getenv('API_PORT', 5000))
+    port = int(os.getenv('API_PORT', 8000))
     debug = os.getenv('API_DEBUG', 'false').lower() == 'true'
 
     print("=" * 80)
-    print("SIMTELPAS AI - Audio Transcription Service [OPTIMIZED]")
+    print("SIMTELPAS AI - Audio Transcription Service")
     print("=" * 80)
     print(f"Model: {Config.WHISPER_MODEL}")
     print(f"Language: {Config.LANGUAGE}")

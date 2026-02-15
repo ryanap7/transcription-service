@@ -9,13 +9,13 @@ print("=" * 80)
 print("SIMTELPAS AI - Preloading Models...")
 print("=" * 80)
 
-# Step 1: Load configuration
+# Load configuration
 print("\n[1/3] Loading configuration...")
 from src.core.config import Config
 print(f"✓ Model: {Config.WHISPER_MODEL}")
 print(f"✓ Language: {Config.LANGUAGE}")
 
-# Step 2: Preload AI models (CRITICAL - this happens BEFORE workers fork)
+# Preload AI models
 print("\n[2/3] Initializing AI models (this may take a while)...")
 try:
     from src.utils.pipeline import AudioTranscriptionPipeline
@@ -30,14 +30,18 @@ except Exception as e:
     traceback.print_exc()
     sys.exit(1)
 
-# Step 3: Import Flask app for Gunicorn
+# Inject pipeline into Flask app BEFORE importing app
 print("\n[3/3] Loading Flask application...")
+
+# Import api module and inject the preloaded pipeline
+import src.api.api as api_module
+api_module.pipeline = global_pipeline
+print("✓ Pipeline injected into Flask app")
+
+# Now import the app object for Gunicorn
 from src.api.api import app
 
 print("\n" + "=" * 80)
 print("✓ Ready to accept requests!")
 print("=" * 80)
 print()
-
-# Note: The 'app' object will be used by Gunicorn
-# Workers will fork AFTER models are loaded, so they share the same models
