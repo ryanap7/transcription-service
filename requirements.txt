@@ -1,13 +1,16 @@
 # Core dependencies
-torch>=2.10.0
-torchaudio>=2.10.0
+torch==2.4.0
+torchaudio==2.4.0
 openai-whisper>=20231117
-pyannote.audio>=4.0.0
+pyannote.audio==3.3.2
 pydub>=0.25.1
 soundfile>=0.12.1
 
+# HuggingFace
+huggingface-hub==0.24.7
+
 # Audio processing
-numpy>=2.3.0
+numpy>=1.24.0,<2.0.0
 scipy>=1.10.0
 
 # API
