@@ -34,7 +34,7 @@ class SpeakerDiarizer:
 
             self.pipeline = Pipeline.from_pretrained(
                 "pyannote/speaker-diarization-3.1",
-                token=self.hf_token
+                use_auth_token=self.hf_token
             )
 
             if torch.cuda.is_available():
