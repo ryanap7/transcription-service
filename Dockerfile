@@ -15,9 +15,8 @@ RUN ln -sf /usr/bin/python3.11 /usr/bin/python && \
     python -m pip install --upgrade pip setuptools wheel
 
 COPY requirements.txt .
-RUN python -m pip install --no-cache-dir torch torchaudio \
-    --index-url https://download.pytorch.org/whl/cu124 && \
-    python -m pip install --no-cache-dir -r requirements.txt
+RUN python -m pip install --no-cache-dir -r requirements.txt \
+    --extra-index-url https://download.pytorch.org/whl/cu126
 
 COPY . .
 
