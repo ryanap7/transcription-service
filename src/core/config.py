@@ -28,7 +28,10 @@ class Config:
 
     # API Keys
     HUGGINGFACE_TOKEN = os.getenv('HUGGINGFACE_TOKEN', '')
-    ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY', '')
+
+    # Ollama settings (self-hosted, gratis)
+    OLLAMA_BASE_URL = os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434')
+    OLLAMA_MODEL = os.getenv('OLLAMA_MODEL', 'qwen2.5:14b')
 
     # Processing settings
     MERGE_GAP_THRESHOLD = 1.0  # seconds

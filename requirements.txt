@@ -4,7 +4,6 @@ torchaudio>=2.10.0
 openai-whisper>=20231117
 pyannote.audio>=4.0.0
 pydub>=0.25.1
-anthropic>=0.18.0
 soundfile>=0.12.1
 
 # Audio processing

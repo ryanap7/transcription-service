@@ -6,7 +6,7 @@ A professional audio transcription system with speaker diarization and AI-powere
 
 - 🎙️ **Speaker Diarization**: Automatically identify and separate different speakers
 - 📝 **Speech-to-Text**: High-quality transcription using OpenAI Whisper
-- 🤖 **AI Summarization**: Intelligent summaries powered by Anthropic Claude
+- 🤖 **AI Summarization**: Intelligent summaries powered by Ollama (self-hosted)
 - 🌍 **Multi-language Support**: Support for multiple languages including Indonesian and English
 - 🚫 **No Raw Audio Storage**: Process audio in-memory without saving raw files
 - 📊 **Rich Statistics**: Detailed analytics on speakers, duration, and word counts
@@ -20,16 +20,19 @@ A professional audio transcription system with speaker diarization and AI-powere
 
 - Python 3.8 or higher
 - FFmpeg (for audio processing)
+- Ollama (for AI summarization)
 
 #### Install FFmpeg
 
 **Ubuntu/Debian:**
+
 ```bash
 sudo apt-get update
 sudo apt-get install ffmpeg
 ```
 
 **macOS:**
+
 ```bash
 brew install ffmpeg
 ```
@@ -37,25 +40,50 @@ brew install ffmpeg
 **Windows:**
 Download from [ffmpeg.org](https://ffmpeg.org/download.html)
 
+#### Install Ollama
+
+**Linux/WSL:**
+
+```bash
+sudo apt-get install zstd -y
+curl -fsSL https://ollama.com/install.sh | sh
+```
+
+**Windows:**
+Download installer from [ollama.com/download](https://ollama.com/download/windows)
+
+**Pull model yang direkomendasikan:**
+
+```bash
+# Production (V100 32GB)
+ollama pull qwen2.5:14b
+
+# Local/Testing (8GB VRAM)
+ollama pull qwen2.5:7b
+```
+
 ### Setup
 
 1. Clone or download this project
 
 2. Create virtual environment (recommended):
+
 ```bash
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```
 
 3. Install dependencies:
+
 ```bash
 pip install -r requirements.txt
 ```
 
 4. Configure environment variables:
+
 ```bash
 cp .env.example .env
-# Edit .env with your API keys
+# Edit .env with your tokens
 ```
 
 ## Configuration
@@ -66,8 +94,8 @@ cp .env.example .env
    - Get token from: https://huggingface.co/settings/tokens
    - Accept terms at: https://huggingface.co/pyannote/speaker-diarization-3.1
 
-2. **Anthropic API Key** (Optional, for AI summaries)
-   - Get from: https://console.anthropic.com/
+2. **Ollama** (Required for AI summaries - self-hosted, gratis)
+   - Install Ollama dan pull model (lihat bagian Install Ollama di atas)
 
 ### Environment Variables
 
@@ -75,10 +103,13 @@ cp .env.example .env
 # Required
 HUGGINGFACE_TOKEN=your_huggingface_token_here
 
-# Optional
-ANTHROPIC_API_KEY=your_anthropic_api_key_here
-WHISPER_MODEL=base  # Options: tiny, base, small, medium, large, large-v3
-LANGUAGE=id  # Default language code
+# Model configuration
+WHISPER_MODEL=large-v3  # Options: tiny, base, small, medium, large, large-v3
+LANGUAGE=id             # Default language code
+
+# Ollama settings
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=qwen2.5:14b  # qwen2.5:7b untuk local testing
 ```
 
 ## Usage
@@ -122,7 +153,7 @@ print(f"Summary: {result['summary']}")
 #### Start API Server
 
 ```bash
-python api.py
+python run.py
 ```
 
 The API will be available at `http://localhost:8000`
@@ -130,11 +161,13 @@ The API will be available at `http://localhost:8000`
 #### API Endpoints
 
 **Health Check**
+
 ```bash
 GET /health
 ```
 
 **Transcribe Audio**
+
 ```bash
 POST /transcribe
 
@@ -149,6 +182,7 @@ Form Data:
 ```
 
 **Example with cURL:**
+
 ```bash
 curl -X POST http://localhost:8000/transcribe \
   -F "file=@recording.mp3" \
@@ -158,6 +192,7 @@ curl -X POST http://localhost:8000/transcribe \
 ```
 
 **Example with Python:**
+
 ```python
 import requests
 
@@ -176,11 +211,13 @@ print(result)
 ```
 
 **Download Output File**
+
 ```bash
 GET /download/<filename>
 ```
 
 **Get Supported Formats**
+
 ```bash
 GET /formats
 ```
@@ -188,14 +225,18 @@ GET /formats
 ## Output Formats
 
 ### TXT Format
+
 Human-readable transcript with timestamps and speaker labels:
+
 ```
 [00:00 - 00:05] SPEAKER_1: Hello, welcome to the meeting.
 [00:05 - 00:10] SPEAKER_2: Thank you for having me.
 ```
 
 ### JSON Format
+
 Structured data including full transcript, segments, statistics, and summary:
+
 ```json
 {
   "audio_info": {
@@ -213,7 +254,9 @@ Structured data including full transcript, segments, statistics, and summary:
 ```
 
 ### SRT Format
+
 Subtitle format for video players:
+
 ```
 1
 00:00:00,000 --> 00:00:05,000
@@ -225,7 +268,9 @@ SPEAKER_2: Thank you for having me.
 ```
 
 ### VTT Format
+
 WebVTT subtitle format for web browsers:
+
 ```
 WEBVTT
 
@@ -273,19 +318,28 @@ The system provides comprehensive error handling with standard international err
 
 ## Performance Considerations
 
-### Model Selection
+### Whisper Model Selection
 
-| Model | Speed | Accuracy | RAM | Use Case |
-|-------|-------|----------|-----|----------|
-| tiny | Fastest | Low | ~1GB | Quick drafts |
-| base | Fast | Good | ~1GB | General use |
-| small | Medium | Better | ~2GB | Balanced |
-| medium | Slow | High | ~5GB | High accuracy |
-| large | Slowest | Highest | ~10GB | Best quality |
+| Model  | Speed   | Accuracy | RAM   | Use Case      |
+| ------ | ------- | -------- | ----- | ------------- |
+| tiny   | Fastest | Low      | ~1GB  | Quick drafts  |
+| base   | Fast    | Good     | ~1GB  | General use   |
+| small  | Medium  | Better   | ~2GB  | Balanced      |
+| medium | Slow    | High     | ~5GB  | High accuracy |
+| large  | Slowest | Highest  | ~10GB | Best quality  |
+
+### Ollama Model Selection
+
+| Model       | VRAM  | Kualitas Indo | Rekomendasi       |
+| ----------- | ----- | ------------- | ----------------- |
+| qwen2.5:3b  | ~4GB  | ⭐⭐⭐        | Low-end GPU       |
+| qwen2.5:7b  | ~8GB  | ⭐⭐⭐⭐      | Local testing     |
+| qwen2.5:14b | ~16GB | ⭐⭐⭐⭐⭐    | Production (V100) |
 
 ### Processing Time
 
 Approximate processing time (relative to audio duration):
+
 - **Tiny/Base**: 0.1-0.2x (e.g., 5 min audio = 0.5-1 min processing)
 - **Small**: 0.3-0.5x
 - **Medium**: 0.5-1x
@@ -293,8 +347,8 @@ Approximate processing time (relative to audio duration):
 
 ### File Size Limits
 
-- Default maximum: 500MB
-- Configurable in `config.py`
+- Default maximum: 1000MB
+- Configurable via `MAX_AUDIO_SIZE_MB` di `.env`
 - Recommended: Keep files under 100MB for optimal performance
 
 ## Architecture
@@ -312,17 +366,17 @@ Approximate processing time (relative to audio duration):
          │
          ▼
 ┌─────────────────┐
-│   Diarizer      │  ← Identify Speakers
+│   Diarizer      │  ← Identify Speakers (pyannote)
 └────────┬────────┘
          │
          ▼
 ┌─────────────────┐
-│  Transcriber    │  ← Speech-to-Text
+│  Transcriber    │  ← Speech-to-Text (Whisper)
 └────────┬────────┘
          │
          ▼
 ┌─────────────────┐
-│  Summarizer     │  ← AI Summary (Optional)
+│  Summarizer     │  ← AI Summary (Ollama - self-hosted)
 └────────┬────────┘
          │
          ▼
@@ -341,18 +395,27 @@ Approximate processing time (relative to audio duration):
 
 ```
 audio-transcription/
-├── config.py              # Configuration settings
-├── exceptions.py          # Custom exception classes
-├── audio_processor.py     # Audio processing utilities
-├── diarizer.py           # Speaker diarization
-├── transcriber.py        # Speech transcription
-├── summarizer.py         # AI summarization
-├── formatter.py          # Output formatting
-├── pipeline.py           # Main pipeline orchestration
-├── api.py                # REST API server
-├── requirements.txt      # Python dependencies
-├── .env.example         # Environment variables template
-└── README.md            # This file
+├── src/
+│   ├── api/
+│   │   └── api.py             # REST API endpoints
+│   ├── core/
+│   │   ├── config.py          # Configuration settings
+│   │   └── exceptions.py      # Custom exception classes
+│   ├── services/
+│   │   ├── diarizer.py        # Speaker diarization
+│   │   ├── transcriber.py     # Speech transcription
+│   │   └── summarizer.py      # AI summarization (Ollama)
+│   └── utils/
+│       ├── audio_processor.py # Audio processing utilities
+│       ├── formatter.py       # Output formatting
+│       └── pipeline.py        # Main pipeline orchestration
+├── docker-compose.yml
+├── Dockerfile
+├── gunicorn.py
+├── requirements.txt
+├── run.py                     # Development server
+├── wsgi.py                    # Production WSGI entry point
+└── README.md
 ```
 
 ## Troubleshooting
@@ -360,56 +423,45 @@ audio-transcription/
 ### Common Issues
 
 **1. "HUGGINGFACE_TOKEN is required"**
+
 - Solution: Set `HUGGINGFACE_TOKEN` in `.env` file
 - Get token from https://huggingface.co/settings/tokens
 - Accept terms at https://huggingface.co/pyannote/speaker-diarization-3.1
 
 **2. "Failed to load Whisper model"**
+
 - Solution: Check internet connection (first run downloads model)
 - Ensure sufficient disk space (~1-10GB depending on model)
 - Try smaller model: `WHISPER_MODEL=base`
 
 **3. "FFmpeg not found"**
+
 - Solution: Install FFmpeg (see Installation section)
 
-**4. Out of memory errors**
-- Solution: Use smaller Whisper model
-- Reduce audio file size
-- Close other applications
+**4. "Ollama tidak bisa diakses"**
 
-**5. Slow processing**
+- Solution: Pastikan Ollama sudah berjalan (`ollama serve`)
+- Cek `OLLAMA_BASE_URL` di `.env` sudah benar
+- Pastikan model sudah di-pull: `ollama pull qwen2.5:14b`
+
+**5. Out of memory errors**
+
+- Solution: Use smaller Whisper model
+- Gunakan Ollama model yang lebih kecil (`qwen2.5:7b`)
+- Reduce audio file size
+
+**6. Slow processing**
+
 - Solution: Use smaller model (tiny/base)
 - Enable GPU if available
 - Process shorter audio segments
 
 ## Advanced Usage
 
-### Batch Processing
-
-```python
-from pipeline import AudioTranscriptionPipeline
-
-pipeline = AudioTranscriptionPipeline()
-
-audio_files = ['file1.mp3', 'file2.mp3', 'file3.mp3']
-results = pipeline.process_batch(
-    audio_files,
-    include_summary=True,
-    output_formats=['txt', 'json']
-)
-
-for result in results:
-    if result['success']:
-        print(f"✓ {result['audio_info']}")
-    else:
-        print(f"✗ Error: {result['error']}")
-```
-
 ### Custom Summary Types
 
 ```python
-from summarizer import AISummarizer
-from formatter import TranscriptFormatter
+from src.services.summarizer import AISummarizer
 
 summarizer = AISummarizer()
 
@@ -433,15 +485,18 @@ with open('recording.mp3', 'rb') as f:
 ## License
 
 This project uses several open-source components:
+
 - OpenAI Whisper (MIT License)
 - pyannote.audio (MIT License)
-- Anthropic Claude API (Commercial)
+- Ollama (MIT License)
+- qwen2.5 (Apache 2.0 License)
 
 ## Credits
 
 - **Whisper**: OpenAI
 - **Pyannote**: CNRS
-- **Claude**: Anthropic
+- **Ollama**: Ollama Inc.
+- **Qwen2.5**: Alibaba Cloud
 
 ## Support
 
